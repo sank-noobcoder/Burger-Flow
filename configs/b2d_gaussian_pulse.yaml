@@ -1,0 +1,31 @@
+dimension: 2
+name: "RI-PINN 2D Gaussian Pulse"
+problem:
+  nu: 0.003
+  ic_preset: "b2d_gaussian_pulse"
+  t_max: 1.0
+model:
+  type: "ri"
+  layers: 6
+  width: 128
+  fourier_sigma: 3.0
+  fourier_size: 128
+  activation: "tanh"
+ri:
+  threshold_pct: 30.0
+  period: 2000
+  duration: 500
+  lambda_ri: 1.0
+  lambda_bc: 5.0
+  lambda_ic: 1.0
+  detect_variant: 2
+training:
+  seed: 0
+  n_colloc: 25000
+  n_bc: 2500
+  n_ic: 2500
+  lr_phase1: 5.0e-5
+  lr_phase2: 5.0e-6
+  max_epochs_phase1: 10000
+  max_epochs_phase2: 5000
+  patience: 3000

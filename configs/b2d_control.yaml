@@ -1,0 +1,29 @@
+dimension: 2
+name: "Burgers 2D Control"
+problem:
+  nu: 0.02
+  ic_preset: "b2d_gaussian_pulse"
+  t_max: 1.0
+model:
+  type: "n"
+  layers: 6
+  width: 128
+  activation: "tanh"
+ri:
+  threshold_pct: 30.0
+  period: 2000
+  duration: 500
+  lambda_ri: 1.0
+  lambda_bc: 5.0
+  lambda_ic: 1.0
+  detect_variant: 1
+training:
+  seed: 0
+  n_colloc: 15000
+  n_bc: 1500
+  n_ic: 1500
+  lr_phase1: 5.0e-5
+  lr_phase2: 5.0e-6
+  max_epochs_phase1: 6000
+  max_epochs_phase2: 3000
+  patience: 2000
