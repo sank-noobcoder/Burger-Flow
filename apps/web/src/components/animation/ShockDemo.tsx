@@ -104,7 +104,7 @@ export const ShockDemo: React.FC = () => {
         </div>
 
         {/* Live SVG Graph */}
-        <div className="w-full md:w-[380px] bg-[rgba(11,15,26,0.85)] p-4 rounded-xl border border-[var(--border)] shadow-inner">
+        <div className="w-full md:w-[380px] bg-[var(--surface)] p-4 rounded-xl border border-[var(--border)] shadow-md">
           <div className="flex justify-between items-center text-xs font-mono text-[var(--text-muted)] mb-2">
             <span>u(x, t={timeT.toFixed(2)})</span>
             <span className="text-[var(--shock)]">Shock Front</span>

@@ -166,6 +166,10 @@ def add_run_metric(db: Session, run_id: str, epoch: int, loss: float, best_loss:
     db.commit()
 
 
+def get_run_metrics(db: Session, run_id: str, limit: int = 2000):
+    return db.query(RunMetric).filter(RunMetric.run_id == run_id).order_by(RunMetric.epoch.asc()).limit(limit).all()
+
+
 def add_artifact(db: Session, run_id: str, name: str, file_path: str, size_bytes: int, content_type: str):
     art = Artifact(
         id=str(uuid.uuid4()),

@@ -7,6 +7,7 @@ from apps.api.app.models.db import init_db, SessionLocal
 from apps.api.app.repositories import runs_repo
 from apps.api.app.core.security import hash_password
 
+from apps.api.app.core.security_firewall import SecurityFirewallMiddleware
 from apps.api.app.api.v1.auth import router as auth_router
 from apps.api.app.api.v1.presets import router as presets_router
 from apps.api.app.api.v1.runs import router as runs_router
@@ -22,7 +23,10 @@ def create_app() -> FastAPI:
         openapi_url="/openapi.json"
     )
 
-    # CORS
+    # 1. Security Threat Firewall (Validates all requests for SQLi, XSS, Path Traversal)
+    app.add_middleware(SecurityFirewallMiddleware)
+
+    # 2. CORS
     app.add_middleware(
         CORSMiddleware,
         allow_origins=["*"],  # Open in dev, proxy routed in prod
@@ -85,6 +89,23 @@ def create_app() -> FastAPI:
                     password_hash=hash_password("admin123"),
                     role="admin"
                 )
+
+            # 3. Clean up orphaned jobs left in "running" or "queued" from terminated server sessions
+            stale_runs = db.query(runs_repo.Run).filter(
+                runs_repo.Run.status.in_(["running", "queued"])
+            ).all()
+            for sr in stale_runs:
+                sr.status = "failed"
+                sr.error_message = "Session terminated before completion (Server restarted)"
+            
+            # 4. In DEV_MODE, ensure quotas are never a blocker for scientific experimentation
+            if settings.DEV_MODE:
+                quotas = db.query(runs_repo.Quota).all()
+                for q in quotas:
+                    q.gpu_min_limit = 5000.0
+                    q.gpu_min_used = 0.0
+                    q.max_active_jobs = 10
+            db.commit()
         finally:
             db.close()
 

@@ -75,9 +75,9 @@ export const LandingView: React.FC<LandingViewProps> = ({
       </div>
 
       {/* 7. Call to Action & Paper Citation Footer */}
-      <div className="border-t border-[var(--border)] bg-[rgba(11,15,26,0.9)] py-16 px-6 text-center">
-        <div className="max-w-3xl mx-auto">
-          <h2 className="text-3xl font-extrabold font-heading mb-4">
+      <div className="border-t border-[var(--border)] bg-[var(--bg-card)] backdrop-blur-md py-16 px-6 text-center relative overflow-hidden">
+        <div className="max-w-3xl mx-auto relative z-10">
+          <h2 className="text-3xl font-extrabold font-heading mb-4 text-[var(--text)]">
             Ready to explore physics-informed fluid flow?
           </h2>
           <p className="text-sm text-[var(--text-muted)] mb-8">
@@ -88,13 +88,6 @@ export const LandingView: React.FC<LandingViewProps> = ({
             Launch Your First Run →
           </button>
 
-          <div className="mt-14 pt-8 border-t border-[var(--border)] text-xs text-[var(--text-dim)] font-mono">
-            <div>
-              Citation: Lee, J. et al. <em>Physics informed neural networks for fluid flow analysis with repetitive parameter initialization.</em>{" "}
-              <strong>Sci. Rep. 15, 16740 (2025).</strong>
-            </div>
-            <div className="mt-2">BurgersFlow PINN Studio v3.1 · Modern Scientific Instrument</div>
-          </div>
         </div>
       </div>
     </div>

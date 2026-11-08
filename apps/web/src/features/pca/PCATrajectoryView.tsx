@@ -1,4 +1,5 @@
-import React, { useState } from "react";
+import React, { useState, useMemo } from "react";
+import { Compass } from "lucide-react";
 
 interface PCAPoint {
   epoch: number;
@@ -19,7 +20,21 @@ export const PCATrajectoryView: React.FC<PCATrajectoryViewProps> = ({ pcaData })
   const [selectedPoint, setSelectedPoint] = useState<PCAPoint | null>(null);
 
   const points = pcaData?.points || [];
-  const variance = pcaData?.explained_variance || [0.65, 0.22];
+  const variance = pcaData?.explained_variance || [0.0, 0.0];
+
+  if (points.length === 0) {
+    return (
+      <div className="glass-panel p-12 text-center max-w-2xl mx-auto my-8 border border-[var(--border)]">
+        <div className="w-12 h-12 rounded-xl bg-[var(--surface-active)] flex items-center justify-center text-[var(--accent-a)] mx-auto mb-3">
+          <Compass size={24} />
+        </div>
+        <h3 className="text-base font-bold font-heading mb-1 text-[var(--text)]">No PCA Trajectory Recorded</h3>
+        <p className="text-xs text-[var(--text-muted)] max-w-md mx-auto font-mono">
+          Layer-0 parameter vector snapshots are captured periodically during training. No PCA checkpoints are available for this run.
+        </p>
+      </div>
+    );
+  }
 
   // Scale coordinates to SVG viewBox (400x300)
   const xs = points.map((p) => p.x);

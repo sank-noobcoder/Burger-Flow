@@ -1,3 +1,4 @@
+import os
 import json
 import numpy as np
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -8,6 +9,7 @@ from apps.api.app.models.db import get_db, User
 from apps.api.app.core.dependencies import get_current_user
 from apps.api.app.schemas.run import CompareResponse, RunDetail, RunMetricsSummary
 from apps.api.app.repositories import runs_repo
+from apps.api.app.core.config import settings
 
 router = APIRouter(prefix="/compare", tags=["compare"])
 
@@ -38,7 +40,32 @@ def compare_runs(
             
         cfg = json.loads(run.config_json) if run.config_json else {}
         arts = [a.name for a in run.artifacts]
+        art_dir = os.path.join(settings.ARTIFACTS_DIR, run.id)
+        if os.path.exists(art_dir):
+            for fname in os.listdir(art_dir):
+                if fname not in arts and os.path.isfile(os.path.join(art_dir, fname)):
+                    arts.append(fname)
         
+        # Sync with prediction_final.json if available
+        pred_path = os.path.join(settings.ARTIFACTS_DIR, run.id, "prediction_final.json")
+        final_l2 = run.final_l2
+        mse = run.mse
+        shock_pos_err = run.shock_pos_err
+        if os.path.exists(pred_path):
+            try:
+                with open(pred_path, "r", encoding="utf-8") as f:
+                    pdata = json.load(f)
+                    if "rel_l2" in pdata:
+                        final_l2 = pdata["rel_l2"]
+                    elif "rel_l2_error" in pdata:
+                        final_l2 = pdata["rel_l2_error"]
+                    if "mse" in pdata:
+                        mse = pdata["mse"]
+                    if "shock_pos_err" in pdata:
+                        shock_pos_err = pdata["shock_pos_err"]
+            except Exception:
+                pass
+
         detail = RunDetail(
             id=run.id,
             name=run.name,
@@ -48,15 +75,15 @@ def compare_runs(
             phase=run.phase,
             progress=run.progress,
             best_loss=run.best_loss,
-            final_l2=run.final_l2,
+            final_l2=final_l2,
             created_at=run.created_at,
             finished_at=run.finished_at,
             config=cfg,
             seed=run.seed,
             metrics=RunMetricsSummary(
-                mse=run.mse,
-                rel_l2=run.final_l2,
-                shock_pos_err=run.shock_pos_err,
+                mse=mse,
+                rel_l2=final_l2,
+                shock_pos_err=shock_pos_err,
                 epochs=run.epochs,
                 wall_clock_s=run.wall_clock_s
             ),
@@ -72,9 +99,9 @@ def compare_runs(
             "model_type": run.model_type,
             "status": run.status,
             "seed": run.seed,
-            "final_l2": run.final_l2,
-            "mse": run.mse,
-            "shock_pos_err": run.shock_pos_err,
+            "final_l2": final_l2,
+            "mse": mse,
+            "shock_pos_err": shock_pos_err,
             "epochs": run.epochs,
             "wall_clock_s": run.wall_clock_s
         })
@@ -83,12 +110,12 @@ def compare_runs(
         if m_type not in metrics_by_model:
             metrics_by_model[m_type] = {"mse": [], "rel_l2": [], "shock_pos_err": []}
             
-        if run.mse is not None:
-            metrics_by_model[m_type]["mse"].append(run.mse)
-        if run.final_l2 is not None:
-            metrics_by_model[m_type]["rel_l2"].append(run.final_l2)
-        if run.shock_pos_err is not None:
-            metrics_by_model[m_type]["shock_pos_err"].append(run.shock_pos_err)
+        if mse is not None:
+            metrics_by_model[m_type]["mse"].append(mse)
+        if final_l2 is not None:
+            metrics_by_model[m_type]["rel_l2"].append(final_l2)
+        if shock_pos_err is not None:
+            metrics_by_model[m_type]["shock_pos_err"].append(shock_pos_err)
 
     mean_metrics = {}
     std_metrics = {}

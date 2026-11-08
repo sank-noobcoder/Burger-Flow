@@ -72,7 +72,7 @@ export const HowItWorks: React.FC = () => {
               <h3 className="text-lg font-bold mb-2 font-heading">{s.title}</h3>
               <p className="text-xs text-[var(--text-muted)] leading-relaxed mb-4">{s.desc}</p>
 
-              <div className="bg-[rgba(11,15,26,0.9)] p-2.5 rounded font-mono text-[11px] text-[var(--accent-a)] border border-[var(--border)] overflow-x-auto">
+              <div className="bg-[var(--surface-active)] p-2.5 rounded font-mono text-[11px] text-[var(--accent-a)] border border-[var(--border)] overflow-x-auto">
                 {s.formula}
               </div>
             </div>

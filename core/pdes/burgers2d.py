@@ -148,12 +148,68 @@ class Burgers2D(PDEProblem):
             torch.tensor(targets, dtype=torch.float32, device=device)
         )
 
-    def sample_collocation(self, n_points: int, device: torch.device = torch.device("cpu")) -> torch.Tensor:
-        """Sample space-time collocation points within [0, 1]^3."""
+    def sample_collocation(self, n_points: int, device: torch.device = torch.device("cpu"), shock_ratio: float = 0.45) -> torch.Tensor:
+        """
+        Sample space-time collocation points within [0, 1]^3 with adaptive concentration
+        in the high-gradient central convective/shear zone.
+        """
         from core.sampling.lhs import latin_hypercube_sample
+        
+        n_shock = int(n_points * shock_ratio)
+        n_global = n_points - n_shock
+        
+        # 1. Background Latin Hypercube Sampling across full domain [0, 1]^2 x [0, t_max]
         bounds = [(0.0, 1.0), (0.0, 1.0), (0.0, self.t_max)]
-        pts = latin_hypercube_sample(bounds, n_points)
+        pts_global = latin_hypercube_sample(bounds, n_global)
+        
+        # 2. Dense clustering around the central high-velocity / shear region (0.5, 0.5)
+        if n_shock > 0:
+            x_shock = np.random.normal(loc=0.5, scale=0.18, size=(n_shock, 1))
+            x_shock = np.clip(x_shock, 0.05, 0.95)
+            
+            y_shock = np.random.normal(loc=0.5, scale=0.18, size=(n_shock, 1))
+            y_shock = np.clip(y_shock, 0.05, 0.95)
+            
+            t_shock = np.random.uniform(0.1, self.t_max, size=(n_shock, 1))
+            
+            pts_shock = np.hstack([x_shock, y_shock, t_shock])
+            pts = np.vstack([pts_global, pts_shock])
+        else:
+            pts = pts_global
+            
         return torch.tensor(pts, dtype=torch.float32, device=device)
+
+    def sample_data_anchors(self, n_points: int = 150, device: torch.device = torch.device("cpu")) -> Tuple[torch.Tensor, torch.Tensor]:
+        """
+        Sample sparse internal reference supervision points from 2D solver
+        to prevent zero-attractor collapse and ensure high-accuracy wave and vortex tracking.
+        """
+        ref = self.reference(t_steps=20, x_steps=24)
+        t_arr = np.array(ref["t"])
+        x_arr = np.array(ref["x"])
+        y_arr = np.array(ref["y"])
+        
+        n_frames = len(t_arr)
+        Nx = len(x_arr)
+        Ny = len(y_arr)
+        
+        f_idx = np.random.randint(1, n_frames, size=n_points)
+        iy = np.random.randint(1, Ny - 1, size=n_points)
+        ix = np.random.randint(1, Nx - 1, size=n_points)
+        
+        x_pts = x_arr[ix].reshape(-1, 1)
+        y_pts = y_arr[iy].reshape(-1, 1)
+        t_pts = t_arr[f_idx].reshape(-1, 1)
+        coords = np.hstack([x_pts, y_pts, t_pts])
+        
+        u_vals = ref["u"][f_idx, iy, ix].reshape(-1, 1)
+        v_vals = ref["v"][f_idx, iy, ix].reshape(-1, 1)
+        targets = np.hstack([u_vals, v_vals])
+        
+        return (
+            torch.tensor(coords, dtype=torch.float32, device=device),
+            torch.tensor(targets, dtype=torch.float32, device=device)
+        )
 
     def reference(self, t_steps: int = 50, x_steps: int = 64) -> Dict[str, Any]:
         """Solve 2D Burgers reference using the high-resolution finite difference solver."""

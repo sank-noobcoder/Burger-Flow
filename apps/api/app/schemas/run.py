@@ -45,6 +45,8 @@ class TrainingConfig(BaseModel):
     lr_phase2: float = Field(5e-6, ge=1e-7, le=1e-2)
     max_epochs_phase1: int = Field(10000, ge=10, le=150000)
     max_epochs_phase2: int = Field(5000, ge=0, le=100000)
+    use_lbfgs: bool = Field(True, description="Enable L-BFGS second-order quasi-Newton polish after Adam")
+    lbfgs_steps: int = Field(250, ge=0, le=5000, description="Number of L-BFGS steps with line search")
     patience: int = Field(3000, ge=100, le=30000)
     seeds: Optional[List[int]] = Field(default_factory=lambda: [0])
 

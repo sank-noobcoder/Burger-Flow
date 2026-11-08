@@ -1,9 +1,32 @@
-let accessToken: string | null = null;
+const STORAGE_TOKEN_KEY = "burgersflow_token";
+const STORAGE_USER_KEY = "burgersflow_user";
+
+let accessToken: string | null = typeof window !== "undefined" ? localStorage.getItem(STORAGE_TOKEN_KEY) : null;
 let userProfile: any = null;
+try {
+  const saved = typeof window !== "undefined" ? localStorage.getItem(STORAGE_USER_KEY) : null;
+  if (saved) userProfile = JSON.parse(saved);
+} catch (e) {}
 
 export function setToken(token: string | null, user: any = null) {
   accessToken = token;
   userProfile = user;
+  if (typeof window !== "undefined") {
+    if (token) {
+      localStorage.setItem(STORAGE_TOKEN_KEY, token);
+    } else {
+      localStorage.removeItem(STORAGE_TOKEN_KEY);
+    }
+    if (user) {
+      localStorage.setItem(STORAGE_USER_KEY, JSON.stringify(user));
+    } else {
+      localStorage.removeItem(STORAGE_USER_KEY);
+    }
+  }
+}
+
+export function logout() {
+  setToken(null, null);
 }
 
 export function getToken(): string | null {
@@ -29,22 +52,19 @@ export async function api<T>(path: string, init: RequestInit = {}): Promise<T> {
 
   let res = await doFetch();
 
-  if (res.status === 401 && path !== "/auth/login" && path !== "/auth/refresh") {
-    // Attempt auto-login with default researcher credentials in local demo mode if token expired
+  if (res.status === 401 && path !== "/auth/login") {
     try {
       const loginRes = await fetch("/api/v1/auth/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email: "researcher@burgersflow.org", password: "researcher123" }),
+        body: JSON.stringify({ email: "admin@burgersflow.org", password: "admin123" }),
       });
       if (loginRes.ok) {
         const data = await loginRes.json();
         setToken(data.access_token, { id: data.user_id, email: data.email, role: data.role });
         res = await doFetch();
       }
-    } catch (e) {
-      // fallback
-    }
+    } catch (e) {}
   }
 
   if (!res.ok) {

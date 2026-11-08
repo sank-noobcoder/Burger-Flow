@@ -101,9 +101,9 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
             onChange={(e) => setFilterDim(e.target.value)}
             className="text-xs bg-[var(--surface-active)] border border-[var(--border)] rounded px-2.5 py-1.5 font-mono text-[var(--text)] outline-none"
           >
-            <option value="all">All Dimensions (1D & 2D)</option>
-            <option value="1">1D Burgers</option>
-            <option value="2">2D Burgers</option>
+            <option value="all" className="bg-slate-900 text-white">All Dimensions (1D & 2D)</option>
+            <option value="1" className="bg-slate-900 text-white">1D Burgers</option>
+            <option value="2" className="bg-slate-900 text-white">2D Burgers</option>
           </select>
 
           {/* Model filter */}
@@ -112,10 +112,10 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
             onChange={(e) => setFilterModel(e.target.value)}
             className="text-xs bg-[var(--surface-active)] border border-[var(--border)] rounded px-2.5 py-1.5 font-mono text-[var(--text)] outline-none"
           >
-            <option value="all">All Architectures</option>
-            <option value="ri">RI-PINN (Re-Init)</option>
-            <option value="ff">FF-PINN (Fourier Features)</option>
-            <option value="n">N-PINN (Standard MLP)</option>
+            <option value="all" className="bg-slate-900 text-white">All Architectures</option>
+            <option value="ri" className="bg-slate-900 text-white">RI-PINN (Re-Init)</option>
+            <option value="ff" className="bg-slate-900 text-white">FF-PINN (Fourier Features)</option>
+            <option value="n" className="bg-slate-900 text-white">N-PINN (Standard MLP)</option>
           </select>
         </div>
 

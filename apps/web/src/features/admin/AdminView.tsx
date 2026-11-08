@@ -1,14 +1,36 @@
 import React, { useState, useEffect } from "react";
 import { api } from "../../lib/apiClient";
-import { Shield, UserX, UserCheck, Clock, FileText } from "lucide-react";
+import { Shield, UserPlus, UserX, UserCheck, Trash2, X } from "lucide-react";
 
-export const AdminView: React.FC = () => {
+interface AdminViewProps {
+  userRole?: string;
+  userEmail?: string;
+  onNavigateDashboard?: () => void;
+  onLoginAdmin?: () => Promise<void>;
+}
+
+export const AdminView: React.FC<AdminViewProps> = ({
+  userRole = "researcher",
+  userEmail = "",
+  onNavigateDashboard,
+  onLoginAdmin,
+}) => {
   const [activeTab, setActiveTab] = useState<"users" | "quotas" | "audit">("users");
   const [users, setUsers] = useState<any[]>([]);
   const [quotas, setQuotas] = useState<any[]>([]);
   const [auditLogs, setAuditLogs] = useState<any[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [message, setMessage] = useState<string | null>(null);
+
+  // Create User Modal state
+  const [showCreateModal, setShowCreateModal] = useState<boolean>(false);
+  const [newEmail, setNewEmail] = useState<string>("");
+  const [newPassword, setNewPassword] = useState<string>("");
+  const [newRole, setNewRole] = useState<string>("researcher");
+  const [newGpuLimit, setNewGpuLimit] = useState<number>(120);
+  const [newMaxJobs, setNewMaxJobs] = useState<number>(2);
+  const [createError, setCreateError] = useState<string | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
 
   const loadData = async () => {
     setLoading(true);
@@ -31,8 +53,10 @@ export const AdminView: React.FC = () => {
   };
 
   useEffect(() => {
-    loadData();
-  }, [activeTab]);
+    if (userRole === "admin") {
+      loadData();
+    }
+  }, [activeTab, userRole]);
 
   const toggleBlockUser = async (userId: string, isBlocked: boolean) => {
     try {
@@ -46,18 +70,90 @@ export const AdminView: React.FC = () => {
     }
   };
 
+  const handleDeleteUser = async (userId: string, userEmail: string) => {
+    if (!confirm(`Are you sure you want to delete user ${userEmail}?`)) return;
+    try {
+      await api(`/admin/users/${userId}`, { method: "DELETE" });
+      setMessage(`User ${userEmail} deleted successfully`);
+      setTimeout(() => setMessage(null), 3000);
+      loadData();
+    } catch (err: any) {
+      alert(err.message || "Failed to delete user");
+    }
+  };
+
+  const handleCreateUser = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsSubmitting(true);
+    setCreateError(null);
+    try {
+      await api("/admin/users", {
+        method: "POST",
+        body: JSON.stringify({
+          email: newEmail,
+          password: newPassword,
+          role: newRole,
+          gpu_min_limit: Number(newGpuLimit),
+          max_active_jobs: Number(newMaxJobs),
+        }),
+      });
+      setMessage(`Successfully created user: ${newEmail}`);
+      setTimeout(() => setMessage(null), 3000);
+      setShowCreateModal(false);
+      setNewEmail("");
+      setNewPassword("");
+      loadData();
+    } catch (err: any) {
+      setCreateError(err.message || "Failed to create user");
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  useEffect(() => {
+    loadData();
+  }, [activeTab]);
+
   return (
     <div className="max-w-6xl mx-auto px-6 py-8">
-      <div className="flex justify-between items-center mb-8">
+      {userRole !== "admin" && (
+        <div className="mb-6 p-3 rounded-lg bg-[rgba(249,115,22,0.12)] border border-[var(--shock)]/30 text-xs font-mono flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <span className="text-base">👑</span>
+            <span className="text-[var(--text)]">
+              <strong>Developer Mode Active:</strong> You are currently testing with <span className="text-[var(--accent-a)] font-bold">{userEmail || "local session"}</span>. Admin management is unlocked for local testing.
+            </span>
+          </div>
+          {onLoginAdmin && (
+            <button
+              onClick={onLoginAdmin}
+              className="px-3 py-1 rounded bg-[var(--shock)] text-white text-xs font-bold hover:opacity-90 transition-opacity"
+            >
+              Switch to Root Admin
+            </button>
+          )}
+        </div>
+      )}
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-8">
         <div>
           <h1 className="text-3xl font-extrabold font-heading flex items-center gap-2.5">
             <Shield className="text-[var(--accent-a)]" />
             <span>Admin Console</span>
           </h1>
           <p className="text-sm text-[var(--text-muted)] mt-1">
-            Manage users, configure cluster GPU quotas, and review security audit logs.
+            Create researcher accounts, assign GPU quotas, and review security audit logs.
           </p>
         </div>
+
+        {activeTab === "users" && (
+          <button
+            onClick={() => setShowCreateModal(true)}
+            className="btn-primary text-xs shadow-md flex items-center gap-1.5"
+          >
+            <UserPlus size={15} />
+            <span>+ Create New Researcher / User</span>
+          </button>
+        )}
       </div>
 
       {message && (
@@ -107,7 +203,7 @@ export const AdminView: React.FC = () => {
                   <th className="py-3 px-4">Email</th>
                   <th className="py-3 px-4">Role</th>
                   <th className="py-3 px-4">Status</th>
-                  <th className="py-3 px-4 text-right">Action</th>
+                  <th className="py-3 px-4 text-right">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-[var(--border)]">
@@ -117,23 +213,38 @@ export const AdminView: React.FC = () => {
                     <tr key={u.id} className="hover:bg-[var(--surface-hover)]">
                       <td className="py-3 px-4 text-[var(--text-dim)]">{u.id.substring(0, 8)}...</td>
                       <td className="py-3 px-4 text-[var(--text)] font-semibold">{u.email}</td>
-                      <td className="py-3 px-4 uppercase">{u.role}</td>
+                      <td className="py-3 px-4">
+                        <span className="px-2 py-0.5 rounded bg-[var(--surface)] uppercase text-[10px] text-[var(--accent-a)] border border-[var(--border)]">
+                          {u.role}
+                        </span>
+                      </td>
                       <td className="py-3 px-4">
                         <span className={`px-2 py-0.5 rounded text-[10px] ${isBlocked ? "bg-red-950 text-[var(--danger)]" : "bg-green-950 text-[var(--ok)]"}`}>
                           {u.status}
                         </span>
                       </td>
                       <td className="py-3 px-4 text-right">
-                        <button
-                          onClick={() => toggleBlockUser(u.id, isBlocked)}
-                          className={`text-xs px-2.5 py-1 rounded transition-colors ${
-                            isBlocked
-                              ? "bg-[rgba(34,197,94,0.15)] text-[var(--ok)] hover:bg-green-900/30"
-                              : "bg-[rgba(239,68,68,0.15)] text-[var(--danger)] hover:bg-red-900/30"
-                          }`}
-                        >
-                          {isBlocked ? "Unblock" : "Block User"}
-                        </button>
+                        <div className="inline-flex items-center gap-2">
+                          <button
+                            onClick={() => toggleBlockUser(u.id, isBlocked)}
+                            className={`text-xs px-2.5 py-1 rounded transition-colors ${
+                              isBlocked
+                                ? "bg-[rgba(34,197,94,0.15)] text-[var(--ok)] hover:bg-green-900/30"
+                                : "bg-[rgba(239,68,68,0.15)] text-[var(--danger)] hover:bg-red-900/30"
+                            }`}
+                          >
+                            {isBlocked ? "Unblock" : "Block"}
+                          </button>
+                          {u.role !== "admin" && (
+                            <button
+                              onClick={() => handleDeleteUser(u.id, u.email)}
+                              className="p-1 rounded text-[var(--text-dim)] hover:text-[var(--danger)] transition-colors"
+                              title="Delete User"
+                            >
+                              <Trash2 size={14} />
+                            </button>
+                          )}
+                        </div>
                       </td>
                     </tr>
                   );
@@ -189,6 +300,113 @@ export const AdminView: React.FC = () => {
           </div>
         )}
       </div>
+
+      {/* CREATE USER MODAL */}
+      {showCreateModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-sm p-4">
+          <div className="glass-panel w-full max-w-md p-6 bg-[#0B0F1A] border border-[var(--border)] shadow-2xl relative">
+            <div className="flex justify-between items-center mb-5">
+              <div className="flex items-center gap-2">
+                <UserPlus className="text-[var(--accent-a)]" size={20} />
+                <h2 className="text-lg font-bold font-heading">Create New User</h2>
+              </div>
+              <button
+                onClick={() => setShowCreateModal(false)}
+                className="text-[var(--text-dim)] hover:text-white transition-colors"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            {createError && (
+              <div className="p-3 mb-4 rounded bg-red-950/50 border border-[var(--danger)] text-[var(--danger)] text-xs font-mono">
+                {createError}
+              </div>
+            )}
+
+            <form onSubmit={handleCreateUser} className="space-y-4 text-xs font-mono">
+              <div>
+                <label className="block text-[var(--text-muted)] mb-1">Email Address</label>
+                <input
+                  type="email"
+                  required
+                  placeholder="researcher2@burgersflow.org"
+                  value={newEmail}
+                  onChange={(e) => setNewEmail(e.target.value)}
+                  className="w-full bg-[var(--surface-active)] border border-[var(--border)] rounded px-3 py-2 text-[var(--text)] outline-none focus:border-[var(--accent-a)]"
+                />
+              </div>
+
+              <div>
+                <label className="block text-[var(--text-muted)] mb-1">Password</label>
+                <input
+                  type="password"
+                  required
+                  placeholder="Min 6 characters"
+                  value={newPassword}
+                  onChange={(e) => setNewPassword(e.target.value)}
+                  className="w-full bg-[var(--surface-active)] border border-[var(--border)] rounded px-3 py-2 text-[var(--text)] outline-none focus:border-[var(--accent-a)]"
+                />
+              </div>
+
+              <div>
+                <label className="block text-[var(--text-muted)] mb-1">Role</label>
+                <select
+                  value={newRole}
+                  onChange={(e) => setNewRole(e.target.value)}
+                  className="w-full bg-[var(--surface-active)] border border-[var(--border)] rounded px-3 py-2 text-[var(--text)] outline-none"
+                >
+                  <option value="researcher" className="bg-slate-900 text-white">Researcher (Can launch & compare runs)</option>
+                  <option value="reviewer" className="bg-slate-900 text-white">Reviewer (Read-only access)</option>
+                  <option value="admin" className="bg-slate-900 text-white">Admin (Full administrative privileges)</option>
+                </select>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-[var(--text-muted)] mb-1">GPU Quota (Minutes)</label>
+                  <input
+                    type="number"
+                    min="10"
+                    max="1000"
+                    value={newGpuLimit}
+                    onChange={(e) => setNewGpuLimit(parseInt(e.target.value))}
+                    className="w-full bg-[var(--surface-active)] border border-[var(--border)] rounded px-3 py-2 text-[var(--text)] outline-none"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[var(--text-muted)] mb-1">Max Active Jobs</label>
+                  <input
+                    type="number"
+                    min="1"
+                    max="10"
+                    value={newMaxJobs}
+                    onChange={(e) => setNewMaxJobs(parseInt(e.target.value))}
+                    className="w-full bg-[var(--surface-active)] border border-[var(--border)] rounded px-3 py-2 text-[var(--text)] outline-none"
+                  />
+                </div>
+              </div>
+
+              <div className="flex justify-end gap-2 pt-4 border-t border-[var(--border)]">
+                <button
+                  type="button"
+                  onClick={() => setShowCreateModal(false)}
+                  className="btn-secondary text-xs"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={isSubmitting}
+                  className="btn-primary text-xs"
+                >
+                  {isSubmitting ? "Creating..." : "Create Account"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

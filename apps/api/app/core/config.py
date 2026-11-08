@@ -23,6 +23,8 @@ class Settings(BaseModel):
     DEFAULT_GPU_MIN_LIMIT: int = 120
     DEFAULT_MAX_ACTIVE_JOBS: int = 3
     
+    DEV_MODE: bool = os.getenv("DEV_MODE", "true").lower() in ("true", "1", "yes")
+    
     CORS_ORIGINS: list = [
         "http://localhost:3000",
         "http://127.0.0.1:3000",

@@ -40,17 +40,25 @@ export const FlowHero: React.FC<FlowHeroProps> = ({ onExploreClick, onLaunchClic
       size: number;
     }> = [];
 
-    const colors = [
+    const isLightMode = () => document.documentElement.getAttribute("data-theme") === "light";
+
+    const darkColors = [
       "rgba(56, 189, 248, ",   // Flow Cyan
       "rgba(139, 92, 246, ",   // Flow Violet
       "rgba(249, 115, 22, ",   // Shock Orange
       "rgba(99, 102, 241, "    // Indigo
     ];
+    const lightColors = [
+      "rgba(2, 132, 199, ",    // Deep Ocean Cyan
+      "rgba(124, 58, 237, ",   // Royal Violet
+      "rgba(234, 88, 12, ",    // Shock Orange
+      "rgba(79, 70, 229, "     // Royal Indigo
+    ];
 
     const initParticle = () => {
       const x = Math.random() * width;
       const y = Math.random() * height;
-      const col = Math.abs(x - width * 0.5) < width * 0.08 ? colors[2] : colors[Math.floor(Math.random() * colors.length)];
+      const colorIndex = Math.abs(x - width * 0.5) < width * 0.08 ? 2 : Math.floor(Math.random() * darkColors.length);
       return {
         x,
         y,
@@ -58,8 +66,8 @@ export const FlowHero: React.FC<FlowHeroProps> = ({ onExploreClick, onLaunchClic
         vy: 0,
         age: Math.random() * 100,
         maxAge: 120 + Math.random() * 80,
-        color: col,
-        size: 1.2 + Math.random() * 2.0,
+        colorIndex,
+        size: 1.4 + Math.random() * 2.2,
       };
     };
 
@@ -72,11 +80,13 @@ export const FlowHero: React.FC<FlowHeroProps> = ({ onExploreClick, onLaunchClic
     const render = () => {
       if (!isPlaying) return;
 
-      // Soft fading trail
-      ctx.fillStyle = "rgba(11, 15, 26, 0.22)";
+      const isLight = isLightMode();
+      // Theme-adaptive soft fading trail
+      ctx.fillStyle = isLight ? "rgba(247, 249, 252, 0.32)" : "rgba(11, 15, 26, 0.22)";
       ctx.fillRect(0, 0, width, height);
 
       t += 0.015;
+      const activeColors = isLight ? lightColors : darkColors;
 
       particles.forEach((p, idx) => {
         // Evaluate simulated 1D/2D Burgers velocity field: u(x, t) ~ -sin(pi*x)/(1 + t*steepening)
@@ -84,7 +94,6 @@ export const FlowHero: React.FC<FlowHeroProps> = ({ onExploreClick, onLaunchClic
         const normY = (p.y / height) * 2 - 1;
 
         // Wave steepening near center x=0 (the Burgers shock front!)
-        const shockSteepness = 1.0 + Math.sin(t * 0.4) * 0.8;
         const u = -Math.sin(Math.PI * normX) / (0.3 + Math.abs(normX) * 0.7);
         const v = Math.cos(Math.PI * normY) * 0.4;
 
@@ -106,11 +115,14 @@ export const FlowHero: React.FC<FlowHeroProps> = ({ onExploreClick, onLaunchClic
         }
 
         const alpha = Math.sin((p.age / p.maxAge) * Math.PI);
+        const colStr = activeColors[p.colorIndex % activeColors.length];
         ctx.beginPath();
         ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
-        ctx.fillStyle = `${p.color}${Math.max(0.1, alpha * 0.7)})`;
-        ctx.shadowBlur = 8;
-        ctx.shadowColor = p.color === colors[2] ? "rgba(249, 115, 22, 0.6)" : "rgba(56, 189, 248, 0.4)";
+        ctx.fillStyle = `${colStr}${Math.max(0.2, alpha * (isLight ? 0.9 : 0.75))})`;
+        ctx.shadowBlur = isLight ? 4 : 8;
+        ctx.shadowColor = p.colorIndex === 2
+          ? (isLight ? "rgba(234, 88, 12, 0.4)" : "rgba(249, 115, 22, 0.6)")
+          : (isLight ? "rgba(2, 132, 199, 0.35)" : "rgba(56, 189, 248, 0.4)");
         ctx.fill();
         ctx.shadowBlur = 0;
       });
@@ -129,7 +141,7 @@ export const FlowHero: React.FC<FlowHeroProps> = ({ onExploreClick, onLaunchClic
   return (
     <div className="relative w-full h-[90vh] min-h-[640px] flex items-center justify-center overflow-hidden border-b border-[var(--border)]">
       {/* Background Canvas */}
-      <canvas ref={canvasRef} className="absolute inset-0 z-0 pointer-events-none opacity-85" />
+      <canvas ref={canvasRef} className="absolute inset-0 z-0 pointer-events-none opacity-90" />
 
       {/* Radial soft glow backdrop */}
       <div className="absolute inset-0 bg-gradient-to-t from-[var(--bg)] via-transparent to-transparent pointer-events-none z-10" />
@@ -137,19 +149,19 @@ export const FlowHero: React.FC<FlowHeroProps> = ({ onExploreClick, onLaunchClic
       {/* Hero Content */}
       <div className="relative z-20 max-w-5xl mx-auto px-6 text-center flex flex-col items-center">
         {/* Paper Citation Badge */}
-        <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-[var(--surface)] border border-[var(--border)] mb-8 text-xs font-mono text-[var(--accent-a)] glass-panel">
+        <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-[var(--surface)] border border-[var(--border)] mb-8 text-xs font-mono text-[var(--accent-a)] glass-panel shadow-sm">
           <span className="w-2 h-2 rounded-full bg-[var(--ok)] animate-ping" />
           <span>Sci. Rep. 15:16740 (2025) · Re-Initialization PINN (RI-PINN)</span>
         </div>
 
         {/* Headline */}
-        <h1 className="text-4xl sm:text-6xl md:text-7xl font-extrabold tracking-tight mb-6 leading-tight">
+        <h1 className="text-4xl sm:text-6xl md:text-7xl font-extrabold tracking-tight mb-6 leading-tight text-[var(--text)]">
           Physics-Informed Neural Networks <br />
           <span className="gradient-text-flow">for Viscous Fluid Flow</span>
         </h1>
 
         {/* Subtitle */}
-        <p className="max-w-2xl text-lg sm:text-xl text-[var(--text-muted)] mb-10 leading-relaxed">
+        <p className="max-w-2xl text-lg sm:text-xl text-[var(--text-muted)] mb-10 leading-relaxed font-medium">
           Break through the low-viscosity shock barrier. Explore the two-phase{" "}
           <strong className="text-[var(--shock)] font-semibold">RI-PINN</strong> strategy with live
           monitoring, automated low-gradient region detection, and side-by-side Cole-Hopf benchmarks.

@@ -130,7 +130,7 @@ def solve_2d_burgers(
             
             # Stage 3
             k3_u, k3_v = rhs_2d_burgers(u2, v2, nu, dx, dy)
-            u = (1.0 / 3.0) * u + (2.0 / 3.0) * (u2 + dt * k3_v)
+            u = (1.0 / 3.0) * u + (2.0 / 3.0) * (u2 + dt * k3_u)
             v = (1.0 / 3.0) * v + (2.0 / 3.0) * (v2 + dt * k3_v)
             
             # Enforce zero boundary

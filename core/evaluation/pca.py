@@ -14,13 +14,27 @@ def compute_pca_trajectory(trajectories: List[Dict[str, Any]]) -> Dict[str, Any]
       - weights: np.ndarray or list of floats (flattened layer 0 weights)
       - loss: float
     """
-    if len(trajectories) < 2:
+    if len(trajectories) == 0:
         return {"points": [], "explained_variance": [0.0, 0.0]}
         
     weights_matrix = np.array([t["weights"] for t in trajectories], dtype=np.float32)
     
-    # 2-component PCA
-    pca = PCA(n_components=2)
+    if len(trajectories) == 1:
+        t = trajectories[0]
+        return {
+            "points": [{
+                "epoch": t["epoch"],
+                "phase": t["phase"],
+                "loss": float(t["loss"]),
+                "x": 0.0,
+                "y": 0.0
+            }],
+            "explained_variance": [1.0, 0.0]
+        }
+
+    # 2-component PCA (or 1-component if only 2 points)
+    n_comp = min(2, weights_matrix.shape[0])
+    pca = PCA(n_components=n_comp)
     coords_2d = pca.fit_transform(weights_matrix)
     
     points = []
@@ -30,10 +44,13 @@ def compute_pca_trajectory(trajectories: List[Dict[str, Any]]) -> Dict[str, Any]
             "phase": t["phase"],
             "loss": float(t["loss"]),
             "x": float(coords_2d[idx, 0]),
-            "y": float(coords_2d[idx, 1])
+            "y": float(coords_2d[idx, 1]) if n_comp > 1 else 0.0
         })
         
     var_ratio = [float(v) for v in pca.explained_variance_ratio_]
+    while len(var_ratio) < 2:
+        var_ratio.append(0.0)
+        
     return {
         "points": points,
         "explained_variance": var_ratio

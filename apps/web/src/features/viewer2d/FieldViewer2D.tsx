@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
-import { Play, Pause, RotateCcw, Sliders } from "lucide-react";
+import { Play, Pause, Activity } from "lucide-react";
 
 interface FieldViewer2DProps {
   data2D?: {
@@ -8,6 +8,8 @@ interface FieldViewer2DProps {
     y?: number[];
     u?: number[][][];
     v?: number[][][];
+    pred_u?: number[][][];
+    pred_v?: number[][][];
     speed?: number[][][];
     mse?: number;
     rel_l2?: number;
@@ -16,26 +18,31 @@ interface FieldViewer2DProps {
 
 export const FieldViewer2D: React.FC<FieldViewer2DProps> = ({ data2D }) => {
   const [frameIdx, setFrameIdx] = useState<number>(0);
-  const [isPlaying, setIsPlaying] = useState<boolean>(true);
+  const [isPlaying, setIsPlaying] = useState<boolean>(false);
   const [showVectors, setShowVectors] = useState<boolean>(true);
   const [displayMode, setDisplayMode] = useState<"speed" | "u" | "v" | "vorticity">("speed");
 
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
 
-  const tArr = data2D?.t || Array.from({ length: 30 }, (_, i) => (1.0 * i) / 29);
-  const totalFrames = tArr.length;
+  const uField = data2D?.pred_u || data2D?.u;
+  const vField = data2D?.pred_v || data2D?.v;
+  const hasRealData = Boolean(uField && uField.length > 0);
 
-  // Auto-play loop
+  const tArr = data2D?.t || [];
+  const totalFrames = uField ? uField.length : (tArr.length || 1);
+
+  // Auto-play loop only if real data is loaded
   useEffect(() => {
-    if (!isPlaying) return;
+    if (!isPlaying || !hasRealData || totalFrames <= 1) return;
     const interval = setInterval(() => {
       setFrameIdx((prev) => (prev + 1) % totalFrames);
-    }, 120);
+    }, 200);
     return () => clearInterval(interval);
-  }, [isPlaying, totalFrames]);
+  }, [isPlaying, totalFrames, hasRealData]);
 
-  // Render 2D Canvas
+  // Render 2D Canvas from real evaluation frames
   useEffect(() => {
+    if (!hasRealData || !uField) return;
     const canvas = canvasRef.current;
     if (!canvas) return;
     const ctx = canvas.getContext("2d");
@@ -45,64 +52,77 @@ export const FieldViewer2D: React.FC<FieldViewer2DProps> = ({ data2D }) => {
     const h = canvas.height;
     ctx.clearRect(0, 0, w, h);
 
-    const N = 40;
-    const cellW = w / N;
-    const cellH = h / N;
-    const curTime = tArr[frameIdx] || 0.0;
+    const safeFrame = Math.min(frameIdx, uField.length - 1);
+    const uMatrix = uField[safeFrame] || [];
+    const vMatrix = vField ? vField[safeFrame] || [] : [];
+    const Ny = uMatrix.length;
+    if (Ny === 0) return;
+    const Nx = uMatrix[0].length;
+    if (Nx === 0) return;
 
-    for (let j = 0; j < N; j++) {
-      const yNorm = j / N;
-      for (let i = 0; i < N; i++) {
-        const xNorm = i / N;
+    const cellW = w / Nx;
+    const cellH = h / Ny;
 
-        // Realistic Gaussian pulse steepening over time
-        const r2 = (xNorm - 0.5)**2 + (yNorm - 0.5)**2;
-        const decay = Math.exp(-curTime * 1.2);
-        const pulse = Math.exp(-r2 / (2 * (0.12 - curTime * 0.03)**2)) * decay;
-        const u = pulse * Math.sin(Math.PI * xNorm);
-        const v = pulse * Math.cos(Math.PI * yNorm);
+    for (let j = 0; j < Ny; j++) {
+      for (let i = 0; i < Nx; i++) {
+        const u = uMatrix[j] ? uMatrix[j][i] || 0.0 : 0.0;
+        const v = vMatrix[j] ? vMatrix[j][i] || 0.0 : 0.0;
         const speed = Math.sqrt(u * u + v * v);
 
         let val = speed;
-        if (displayMode === "u") val = (u + 1) / 2;
-        else if (displayMode === "v") val = (v + 1) / 2;
-        else if (displayMode === "vorticity") val = Math.abs(u - v);
+        if (displayMode === "u") val = (u + 1.0) / 2.0;
+        else if (displayMode === "v") val = (v + 1.0) / 2.0;
+        else if (displayMode === "vorticity") val = Math.min(1.0, Math.abs(u - v));
 
-        // Viridis colormap mapping
-        const rCol = Math.floor(val * 240 + (1 - val) * 20);
-        const gCol = Math.floor(val * 180 + (1 - val) * 40);
-        const bCol = Math.floor((1 - val) * 220 + val * 30);
+        // Clamped normalizer [0, 1]
+        const normVal = Math.max(0.0, Math.min(1.0, val));
+
+        // High-contrast Viridis palette mapping
+        const rCol = Math.floor(normVal * 230 + (1 - normVal) * 20);
+        const gCol = Math.floor(normVal * 180 + (1 - normVal) * 40);
+        const bCol = Math.floor((1 - normVal) * 210 + normVal * 40);
 
         ctx.fillStyle = `rgb(${rCol}, ${gCol}, ${bCol})`;
         ctx.fillRect(i * cellW, j * cellH, cellW + 1, cellH + 1);
       }
     }
 
-    // Velocity vectors overlay
-    if (showVectors) {
-      ctx.strokeStyle = "rgba(255, 255, 255, 0.4)";
+    // Velocity vectors overlay from real computed flow field
+    if (showVectors && vField) {
+      ctx.strokeStyle = "rgba(255, 255, 255, 0.45)";
       ctx.lineWidth = 1;
-      const step = 4;
-      for (let j = 2; j < N; j += step) {
-        for (let i = 2; i < N; i += step) {
+      const step = Math.max(2, Math.floor(Nx / 16));
+      for (let j = 0; j < Ny; j += step) {
+        for (let i = 0; i < Nx; i += step) {
           const cx = i * cellW + cellW / 2;
           const cy = j * cellH + cellH / 2;
-
-          const xNorm = i / N;
-          const yNorm = j / N;
-          const r2 = (xNorm - 0.5)**2 + (yNorm - 0.5)**2;
-          const pulse = Math.exp(-r2 / (2 * 0.1**2));
-          const u = pulse * 12;
-          const v = pulse * 12;
+          const u = uMatrix[j] ? uMatrix[j][i] || 0.0 : 0.0;
+          const v = vMatrix[j] ? vMatrix[j][i] || 0.0 : 0.0;
 
           ctx.beginPath();
           ctx.moveTo(cx, cy);
-          ctx.lineTo(cx + u, cy + v);
+          ctx.lineTo(cx + u * 15, cy + v * 15);
           ctx.stroke();
         }
       }
     }
-  }, [frameIdx, showVectors, displayMode, tArr]);
+  }, [frameIdx, showVectors, displayMode, hasRealData, uField, vField]);
+
+  if (!hasRealData) {
+    return (
+      <div className="glass-panel p-12 text-center max-w-2xl mx-auto my-8 border border-[var(--border)]">
+        <div className="w-12 h-12 rounded-xl bg-[var(--surface-active)] flex items-center justify-center text-[var(--accent-a)] mx-auto mb-3">
+          <Activity size={24} />
+        </div>
+        <h3 className="text-base font-bold font-heading mb-1 text-[var(--text)]">
+          2D Solution Field Not Yet Generated
+        </h3>
+        <p className="text-xs text-[var(--text-muted)] max-w-md mx-auto font-mono">
+          This 2D Burgers training run does not have prediction artifacts yet. The authentic dynamic velocity field (u, v, vorticity) will render here once the run finishes.
+        </p>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">

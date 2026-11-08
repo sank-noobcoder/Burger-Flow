@@ -5,7 +5,69 @@ from apps.api.app.models.db import get_db, User, Quota, AuditLog
 from apps.api.app.core.dependencies import get_current_admin
 from apps.api.app.schemas.auth import UserResponse
 
+from pydantic import BaseModel, Field
+from apps.api.app.core.security import hash_password
+from apps.api.app.repositories import runs_repo
+
 router = APIRouter(prefix="/admin", tags=["admin"])
+
+
+class CreateUserRequest(BaseModel):
+    email: str = Field(..., description="User email")
+    password: str = Field(..., min_length=6, description="User password")
+    role: str = Field("researcher", description="Role: researcher, reviewer, admin")
+    gpu_min_limit: int = Field(120, ge=10, le=1000)
+    max_active_jobs: int = Field(2, ge=1, le=10)
+
+
+@router.post("/users", response_model=UserResponse)
+def create_new_user(
+    req: CreateUserRequest,
+    admin: User = Depends(get_current_admin),
+    db: Session = Depends(get_db)
+):
+    existing = runs_repo.get_user_by_email(db, req.email)
+    if existing:
+        raise HTTPException(status_code=400, detail="User with this email already exists")
+    
+    user = runs_repo.create_user(
+        db=db,
+        email=req.email,
+        password_hash=hash_password(req.password),
+        role=req.role
+    )
+    
+    # Update quota if customized
+    quota = runs_repo.get_user_quota(db, user.id)
+    if quota:
+        quota.gpu_min_limit = req.gpu_min_limit
+        quota.max_active_jobs = req.max_active_jobs
+        db.commit()
+        
+    runs_repo.add_audit_log(
+        db, action="admin_create_user", user_id=admin.id,
+        detail=f"Created user {user.email} with role {user.role}"
+    )
+    return user
+
+
+@router.delete("/users/{user_id}")
+def delete_user(
+    user_id: str,
+    admin: User = Depends(get_current_admin),
+    db: Session = Depends(get_db)
+):
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    if user.id == admin.id:
+        raise HTTPException(status_code=400, detail="Cannot delete your own admin account")
+    db.delete(user)
+    db.commit()
+    runs_repo.add_audit_log(
+        db, action="admin_delete_user", user_id=admin.id, detail=f"Deleted user {user.email}"
+    )
+    return {"message": f"User {user.email} deleted successfully"}
 
 
 @router.get("/users", response_model=List[UserResponse])

@@ -54,11 +54,18 @@ def evaluate_run(
     problem: Any,
     t_steps: int = 100,
     x_steps: int = 200,
-    device: torch.device = torch.device("cpu")
+    device: Any = None
 ) -> Dict[str, Any]:
     """
     Evaluates trained model against the reference solution and computes all metrics.
+    Automatically detects model device to avoid CUDA/CPU tensor mismatch.
     """
+    if device is None:
+        try:
+            device = next(model.parameters()).device
+        except StopIteration:
+            device = torch.device("cpu")
+            
     model.eval()
     ref_data = problem.reference(t_steps=t_steps, x_steps=x_steps)
     
@@ -104,6 +111,7 @@ def evaluate_run(
         frame_indices = np.linspace(0, n_frames - 1, min(10, n_frames), dtype=int)
         
         mse_list, rel_l2_list = [], []
+        all_u_pred, all_v_pred = [], []
         
         for f_idx in frame_indices:
             t_val = t_vec[f_idx]
@@ -121,6 +129,9 @@ def evaluate_run(
             u_ref = ref_data["u"][f_idx]
             v_ref = ref_data["v"][f_idx]
             
+            all_u_pred.append(u_pred.tolist())
+            all_v_pred.append(v_pred.tolist())
+            
             mse_list.append(0.5 * (compute_mse(u_pred, u_ref) + compute_mse(v_pred, v_ref)))
             rel_l2_list.append(0.5 * (compute_relative_l2(u_pred, u_ref) + compute_relative_l2(v_pred, v_ref)))
             
@@ -130,6 +141,10 @@ def evaluate_run(
             "shock_pos_err": 0.015,
             "x": x_vec.tolist(),
             "y": y_vec.tolist(),
-            "t": t_vec.tolist()
+            "t": [float(t_vec[idx]) for idx in frame_indices],
+            "pred_u": all_u_pred,
+            "pred_v": all_v_pred,
+            "ref_u": [ref_data["u"][idx].tolist() for idx in frame_indices],
+            "ref_v": [ref_data["v"][idx].tolist() for idx in frame_indices]
         }
     return {}

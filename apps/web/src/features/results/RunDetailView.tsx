@@ -19,43 +19,65 @@ export const RunDetailView: React.FC<RunDetailViewProps> = ({ runId, onBack, onC
   const [pcaData, setPcaData] = useState<any | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
 
-  useEffect(() => {
-    async function loadRun() {
-      try {
-        const r = await api<any>(`/runs/${runId}`);
-        setRun(r);
-        if (r.status === "running" || r.status === "queued") {
-          setActiveTab("monitor");
-        }
+  const fetchRunAndArtifacts = async (isInitial = false) => {
+    try {
+      const r = await api<any>(`/runs/${runId}`);
+      setRun(r);
 
-        // Fetch prediction artifact
-        try {
-          if (r.dimension === 1) {
-            const predRes = await fetch(`/api/v1/runs/${runId}/artifacts/prediction_final.json`);
-            if (predRes.ok) setPredData(await predRes.json());
-          } else {
-            const predRes = await fetch(`/api/v1/runs/${runId}/artifacts/prediction_2d.json`);
-            if (predRes.ok) setPredData(await predRes.json());
-          }
-        } catch (e) {
-          console.warn("Artifact load info", e);
-        }
-
-        // Fetch PCA artifact
-        try {
-          const pcaRes = await fetch(`/api/v1/runs/${runId}/artifacts/pca.json`);
-          if (pcaRes.ok) setPcaData(await pcaRes.json());
-        } catch (e) {
-          console.warn("PCA load info", e);
-        }
-      } catch (err) {
-        console.error("Failed to load run", err);
-      } finally {
-        setLoading(false);
+      if (isInitial && (r.status === "running" || r.status === "queued")) {
+        setActiveTab("monitor");
       }
+
+      // Fetch artifacts only if the run is completed and the artifact exists
+      const artList: string[] = r.artifacts || [];
+      const isFinished = r.status === "succeeded" || r.status === "failed";
+      const hasPredArt = artList.includes("prediction_final.json") || artList.includes("prediction_2d.json");
+
+      if (isFinished || hasPredArt) {
+        const artName = artList.includes("prediction_final.json")
+          ? "prediction_final.json"
+          : artList.includes("prediction_2d.json")
+          ? "prediction_2d.json"
+          : null;
+        if (artName) {
+          try {
+            const data = await api<any>(`/runs/${runId}/artifacts/${artName}`).catch(() => null);
+            if (data && !data.status) setPredData(data);
+          } catch (e) {
+            console.warn("Artifact load info", e);
+          }
+        }
+
+        if (artList.includes("pca.json")) {
+          try {
+            const data = await api<any>(`/runs/${runId}/artifacts/pca.json`).catch(() => null);
+            if (data && !data.status) setPcaData(data);
+          } catch (e) {
+            console.warn("PCA load info", e);
+          }
+        }
+      }
+    } catch (err) {
+      console.error("Failed to load run", err);
+    } finally {
+      if (isInitial) setLoading(false);
     }
-    loadRun();
+  };
+
+  useEffect(() => {
+    fetchRunAndArtifacts(true);
   }, [runId]);
+
+  // If run is running or queued, poll status every 3 seconds to detect completion
+  useEffect(() => {
+    if (!run || (run.status !== "running" && run.status !== "queued")) return;
+
+    const interval = setInterval(() => {
+      fetchRunAndArtifacts(false);
+    }, 3000);
+
+    return () => clearInterval(interval);
+  }, [run?.status, runId]);
 
   if (loading) {
     return (
@@ -155,8 +177,25 @@ export const RunDetailView: React.FC<RunDetailViewProps> = ({ runId, onBack, onC
       {/* Tab Panels */}
       <div>
         {activeTab === "results" && (
-          run.dimension === 1 ? (
-            <FieldViewer1D predictionData={predData} />
+          (run.status === "running" || run.status === "queued") ? (
+            <div className="glass-panel p-8 text-center max-w-xl mx-auto my-8 border border-[var(--border)]">
+              <div className="w-12 h-12 rounded-xl bg-[var(--surface-active)] flex items-center justify-center text-[var(--accent-a)] mx-auto mb-3 animate-pulse">
+                <Activity size={24} />
+              </div>
+              <h3 className="text-base font-bold font-heading mb-1 text-[var(--text)]">PINN Training In Progress</h3>
+              <p className="text-xs text-[var(--text-muted)] max-w-md mx-auto font-mono mb-4">
+                The neural network is actively training and resolving Burgers shock dynamics. The complete interactive space-time solution field and Cole-Hopf benchmark will render here immediately once training completes.
+              </p>
+              <button
+                onClick={() => setActiveTab("monitor")}
+                className="btn-primary text-xs flex items-center gap-2 mx-auto"
+              >
+                <Activity size={14} />
+                <span>Open Live Monitor Stream</span>
+              </button>
+            </div>
+          ) : run.dimension === 1 ? (
+            <FieldViewer1D predictionData={predData} modelType={run.model_type} modelName={run.name} />
           ) : (
             <FieldViewer2D data2D={predData} />
           )
@@ -167,7 +206,26 @@ export const RunDetailView: React.FC<RunDetailViewProps> = ({ runId, onBack, onC
         )}
 
         {activeTab === "pca" && (
-          <PCATrajectoryView pcaData={pcaData} />
+          (run.status === "running" || run.status === "queued") ? (
+            <div className="glass-panel p-8 text-center max-w-xl mx-auto my-8 border border-[var(--border)]">
+              <div className="w-12 h-12 rounded-xl bg-[var(--surface-active)] flex items-center justify-center text-[var(--accent-a)] mx-auto mb-3 animate-pulse">
+                <Compass size={24} />
+              </div>
+              <h3 className="text-base font-bold font-heading mb-1 text-[var(--text)]">PCA Checkpoints Accumulating</h3>
+              <p className="text-xs text-[var(--text-muted)] max-w-md mx-auto font-mono mb-4">
+                Layer-0 parameter snapshots are recorded periodically during training. The final 2D PCA parameter trajectory map will render here automatically upon run completion.
+              </p>
+              <button
+                onClick={() => setActiveTab("monitor")}
+                className="btn-primary text-xs flex items-center gap-2 mx-auto"
+              >
+                <Activity size={14} />
+                <span>Open Live Monitor Stream</span>
+              </button>
+            </div>
+          ) : (
+            <PCATrajectoryView pcaData={pcaData} />
+          )
         )}
 
         {activeTab === "config" && (
@@ -181,21 +239,29 @@ export const RunDetailView: React.FC<RunDetailViewProps> = ({ runId, onBack, onC
 
             <div className="glass-panel p-5">
               <div className="text-xs font-mono font-bold uppercase text-[var(--text)] mb-3">Artifacts Storage</div>
-              <div className="space-y-2">
-                {run.artifacts?.map((artName: string) => (
-                  <div key={artName} className="flex justify-between items-center p-3 rounded-lg bg-[var(--surface)] text-xs font-mono">
-                    <span className="text-[var(--text)]">{artName}</span>
-                    <a
-                      href={`/api/v1/runs/${runId}/artifacts/${artName}`}
-                      download={artName}
-                      className="text-[var(--accent-a)] hover:underline flex items-center gap-1"
-                    >
-                      <Download size={13} />
-                      <span>Download</span>
-                    </a>
-                  </div>
-                ))}
-              </div>
+              {run.artifacts && run.artifacts.length > 0 ? (
+                <div className="space-y-2">
+                  {run.artifacts.map((artName: string) => (
+                    <div key={artName} className="flex justify-between items-center p-3 rounded-lg bg-[var(--surface)] text-xs font-mono">
+                      <span className="text-[var(--text)]">{artName}</span>
+                      <a
+                        href={`/api/v1/runs/${runId}/artifacts/${artName}`}
+                        download={artName}
+                        className="text-[var(--accent-a)] hover:underline flex items-center gap-1"
+                      >
+                        <Download size={13} />
+                        <span>Download</span>
+                      </a>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="p-4 rounded-lg bg-[var(--surface)] text-xs font-mono text-[var(--text-muted)] text-center">
+                  {(run.status === "running" || run.status === "queued")
+                    ? "Training in progress. Generated artifacts (prediction_final.json, loss_history.json, pca.json, model weights) will be available here when completed."
+                    : "No artifacts stored for this run."}
+                </div>
+              )}
             </div>
           </div>
         )}

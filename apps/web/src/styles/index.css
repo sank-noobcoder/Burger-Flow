@@ -173,3 +173,35 @@ code, pre, .font-mono {
     scroll-behavior: auto !important;
   }
 }
+
+/* Universal High-Contrast Native Select & Option Styles */
+select {
+  color-scheme: dark;
+}
+
+select option, select optgroup {
+  background-color: #0F172A !important;
+  color: #F8FAFC !important;
+  padding: 8px 12px;
+}
+
+select option:checked {
+  background-color: #0284C7 !important;
+  color: #FFFFFF !important;
+}
+
+[data-theme="light"] select {
+  color-scheme: light;
+}
+
+[data-theme="light"] select option, 
+[data-theme="light"] select optgroup {
+  background-color: #FFFFFF !important;
+  color: #0F172A !important;
+}
+
+[data-theme="light"] select option:checked {
+  background-color: #0284C7 !important;
+  color: #FFFFFF !important;
+}
+

@@ -18,6 +18,8 @@ def compute_gradient_metric(
       2: |u_x| + |u_t| (spatial + temporal gradient sum)
       3: Variant 2 with high-residual points excluded from candidate low-gradient set
     """
+    if coords is None or coords.numel() == 0:
+        return torch.tensor([], device=next(model.parameters()).device)
     coords_req = coords.clone().detach().requires_grad_(True)
     out = model(coords_req)  # (N, out_dim)
     
@@ -69,6 +71,8 @@ def detect_low_gradient_regions(
       indices_dr: Tensor (N_dr,)
       coords_dr_np: downsampled numpy array of detected points for visualization
     """
+    if coords is None or coords.numel() == 0:
+        return torch.tensor([]), torch.tensor([], dtype=torch.long), np.array([])
     metric = compute_gradient_metric(model, coords, variant=variant, pde_res=pde_res)
     
     n_points = coords.shape[0]

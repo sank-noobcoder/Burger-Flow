@@ -23,7 +23,7 @@ def start():
 
     # 3. Start FastAPI Backend
     print("\n[2/3] Launching FastAPI Backend on http://localhost:8000 ...")
-    api_cmd = [py_exe, "-m", "uvicorn", "apps.api.app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+    api_cmd = [py_exe, "-m", "uvicorn", "apps.api.app.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
     api_process = subprocess.Popen(api_cmd, cwd=ROOT_DIR)
 
     # Give API a moment to bind
